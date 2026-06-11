@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课表图片识别</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app-shell">
+        <section class="workspace" aria-labelledby="pageTitle">
+            <header class="topbar">
+                <div>
+                    <p class="eyebrow">Schedule AI</p>
+                    <h1 id="pageTitle">课表图片识别</h1>
+                </div>
+                <div class="service-chip" id="serviceStatus">等待图片</div>
+            </header>
+
+            <div class="layout">
+                <section class="upload-panel" aria-label="图片上传">
+                    <label class="drop-zone" id="dropZone" for="imageInput">
+                        <input id="imageInput" type="file" accept="image/jpeg,image/png" hidden>
+                        <span class="upload-icon" aria-hidden="true">+</span>
+                        <span class="upload-title">选择课表图片</span>
+                        <span class="upload-meta">JPG / PNG，最大 5MB</span>
+                    </label>
+
+                    <div class="preview-wrap" id="previewWrap" hidden>
+                        <img id="previewImage" alt="课表图片预览">
+                    </div>
+
+                    <div class="file-row">
+                        <span id="fileName">未选择文件</span>
+                        <button class="ghost-button" id="clearButton" type="button" disabled>清空</button>
+                    </div>
+
+                    <button class="primary-button" id="recognizeButton" type="button" disabled>
+                        开始识别
+                    </button>
+
+                    <p class="message" id="message" role="status" aria-live="polite"></p>
+                </section>
+
+                <section class="result-panel" aria-label="识别结果">
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <span>学期</span>
+                            <strong id="semesterValue">-</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span>周次</span>
+                            <strong id="weekValue">-</strong>
+                        </div>
+                        <div class="summary-item">
+                            <span>课程数</span>
+                            <strong id="courseCount">0</strong>
+                        </div>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>课程名</th>
+                                    <th>星期</th>
+                                    <th>节次</th>
+                                    <th>地点</th>
+                                    <th>教师</th>
+                                    <th>周次</th>
+                                </tr>
+                            </thead>
+                            <tbody id="courseTableBody">
+                                <tr>
+                                    <td colspan="6" class="empty-cell">暂无识别结果</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <details class="json-box" open>
+                        <summary>JSON</summary>
+                        <pre id="jsonOutput">{}</pre>
+                    </details>
+                </section>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
