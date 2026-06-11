@@ -65,7 +65,7 @@ public class ScheduleAIServiceImpl implements ScheduleAIService {
         validateImage(image);
 
         if (!StringUtils.hasText(mimoProperties.getApiKey())) {
-            throw new BusinessException(500, "未配置 MIMO_API_KEY 环境变量");
+            throw new BusinessException(500, "未配置 AI_API_KEY 环境变量");
         }
 
         try {
@@ -80,7 +80,7 @@ public class ScheduleAIServiceImpl implements ScheduleAIService {
             if (isTimeout(exception)) {
                 throw new BusinessException(500, "AI识别超时，请稍后重试，或换一张更清晰、文件更小的课表图片");
             }
-            throw new BusinessException(500, "小米Mimo API调用失败（当前模型：" + mimoProperties.getModel() + "）：" + exception.getMessage());
+            throw new BusinessException(500, "AI API调用失败（当前模型：" + mimoProperties.getModel() + "）：" + exception.getMessage());
         }
     }
 
