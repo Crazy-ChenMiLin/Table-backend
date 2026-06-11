@@ -29,7 +29,9 @@ AI_TIMEOUT_SECONDS=180
 AI_MAX_RETRIES=1
 AI_MAX_IMAGE_SIZE_MB=5
 ```
+src/main/resources/picture又部分的配置env的示例：
 
+```env
 3. 启动项目
 
 ```powershell
