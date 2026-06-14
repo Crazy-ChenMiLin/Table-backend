@@ -11,9 +11,14 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.output.Response;
 import org.example.demo1.config.MimoProperties;
 import org.example.demo1.exception.BusinessException;
+import org.example.demo1.logging.RecognitionTimingContext;
+import org.example.demo1.logging.TimedLog;
 import org.example.demo1.model.dto.ScheduleResponse;
 import org.example.demo1.service.ScheduleAIService;
 import org.example.demo1.util.Base64Util;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,6 +30,8 @@ import java.util.List;
 
 @Service
 public class ScheduleAIServiceImpl implements ScheduleAIService {
+
+    private static final Logger log = LoggerFactory.getLogger(ScheduleAIServiceImpl.class);
 
     private static final String SYSTEM_PROMPT = """
             你是一个专业的课表信息提取助手。请仅根据上传的课表图片，提取全部课程信息，并以纯JSON格式返回，不包含任何解释、Markdown标记或额外文本。
@@ -61,26 +68,56 @@ public class ScheduleAIServiceImpl implements ScheduleAIService {
     }
 
     @Override
+    @TimedLog("schedule_ai_service_recognize")
     public ScheduleResponse recognize(MultipartFile image) {
-        validateImage(image);
-
-        if (!StringUtils.hasText(mimoProperties.getApiKey())) {
-            throw new BusinessException(500, "未配置 AI_API_KEY 环境变量");
-        }
+        RecognitionTimingContext timingContext = RecognitionTimingContext.start("schedule_ai_recognize");
+        long serviceStartNano = System.nanoTime();
+        timingContext.putAttribute("image_content_type", image == null ? null : image.getContentType());
+        timingContext.putAttribute("image_size_bytes", image == null ? null : image.getSize());
 
         try {
-            String dataUri = Base64Util.encodeToDataUri(image.getBytes(), image.getContentType());
-            String rawJson = callMimo(dataUri);
-            return parseScheduleResponse(rawJson);
+            timingContext.setCurrentStage("validate_image");
+            long stageStartNano = System.nanoTime();
+            validateImage(image);
+            timingContext.recordStage("validate_image_ms", elapsedMillis(stageStartNano));
+
+            if (!StringUtils.hasText(mimoProperties.getApiKey())) {
+                throw new BusinessException(500, "未配置 AI_API_KEY 环境变量");
+            }
+
+            timingContext.setCurrentStage("read_image_bytes");
+            stageStartNano = System.nanoTime();
+            byte[] imageBytes = image.getBytes();
+            timingContext.recordStage("read_image_bytes_ms", elapsedMillis(stageStartNano));
+
+            timingContext.setCurrentStage("base64_encode");
+            stageStartNano = System.nanoTime();
+            String dataUri = Base64Util.encodeToDataUri(imageBytes, image.getContentType());
+            timingContext.recordStage("base64_encode_ms", elapsedMillis(stageStartNano));
+
+            String rawJson = callMimo(dataUri, timingContext);
+
+            timingContext.setCurrentStage("parse_json");
+            stageStartNano = System.nanoTime();
+            ScheduleResponse scheduleResponse = parseScheduleResponse(rawJson);
+            timingContext.recordStage("parse_json_ms", elapsedMillis(stageStartNano));
+            timingContext.markSuccess();
+            return scheduleResponse;
         } catch (BusinessException exception) {
+            timingContext.markFailure(exception);
             throw exception;
         } catch (IOException exception) {
+            timingContext.markFailure(exception);
             throw new BusinessException(500, "图片读取失败");
         } catch (Exception exception) {
+            timingContext.markFailure(exception);
             if (isTimeout(exception)) {
                 throw new BusinessException(500, "AI识别超时，请稍后重试，或换一张更清晰、文件更小的课表图片");
             }
             throw new BusinessException(500, "AI API调用失败（当前模型：" + mimoProperties.getModel() + "）：" + exception.getMessage());
+        } finally {
+            timingContext.recordStage("service_total_ms", elapsedMillis(serviceStartNano));
+            log.info(timingContext.toLogFields());
         }
     }
 
@@ -100,17 +137,59 @@ public class ScheduleAIServiceImpl implements ScheduleAIService {
         }
     }
 
-    private String callMimo(String imageDataUri) {
+    private String callMimo(String imageDataUri, RecognitionTimingContext timingContext) {
+        String normalizedBaseUrl = normalizeBaseUrl(mimoProperties.getBaseUrl());
+        timingContext.putAttribute("mimo_model", mimoProperties.getModel());
+        timingContext.putAttribute("mimo_base_url", normalizedBaseUrl);
+        timingContext.putAttribute("mimo_timeout_seconds", mimoProperties.getTimeoutSeconds());
+        timingContext.putAttribute("mimo_max_retries", mimoProperties.getMaxRetries());
+
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(SYSTEM_PROMPT));
         messages.add(UserMessage.from(ImageContent.from(imageDataUri, ImageContent.DetailLevel.AUTO)));
 
-        Response<AiMessage> response = createChatModel().generate(messages);
-        if (response == null || response.content() == null || !StringUtils.hasText(response.content().text())) {
-            throw new BusinessException(500, "AI返回结果格式异常");
-        }
+        timingContext.setCurrentStage("build_model");
+        long stageStartNano = System.nanoTime();
+        ChatLanguageModel chatModel = createChatModel();
+        timingContext.recordStage("build_model_ms", elapsedMillis(stageStartNano));
 
-        return response.content().text();
+        timingContext.setCurrentStage("invoke_mimo");
+        stageStartNano = System.nanoTime();
+        boolean success = false;
+        Throwable failure = null;
+        String exceptionType = "-";
+        String exceptionMessage = "-";
+
+        try {
+            Response<AiMessage> response = chatModel.generate(messages);
+            if (response == null || response.content() == null || !StringUtils.hasText(response.content().text())) {
+                throw new BusinessException(500, "AI返回结果格式异常");
+            }
+
+            success = true;
+            return response.content().text();
+        } catch (Exception exception) {
+            failure = exception;
+            exceptionType = exception.getClass().getSimpleName();
+            exceptionMessage = sanitize(exception.getMessage());
+            throw exception;
+        } finally {
+            long invokeMimoMs = elapsedMillis(stageStartNano);
+            timingContext.recordStage("invoke_mimo_ms", invokeMimoMs);
+            log.info(
+                    "event=mimo_invoke_finished traceId={} success={} current_stage=invoke_mimo invoke_mimo_ms={} mimo_model={} mimo_base_url={} mimo_timeout_seconds={} mimo_max_retries={} timeout_detected={} exception_type={} exception_message={}",
+                    MDC.get("traceId"),
+                    success,
+                    invokeMimoMs,
+                    mimoProperties.getModel(),
+                    normalizedBaseUrl,
+                    mimoProperties.getTimeoutSeconds(),
+                    mimoProperties.getMaxRetries(),
+                    failure != null && isTimeout(failure),
+                    exceptionType,
+                    exceptionMessage
+            );
+        }
     }
 
     private ChatLanguageModel createChatModel() {
@@ -177,5 +256,17 @@ public class ScheduleAIServiceImpl implements ScheduleAIService {
         }
 
         return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+    }
+
+    private long elapsedMillis(long startNano) {
+        return (System.nanoTime() - startNano) / 1_000_000;
+    }
+
+    private String sanitize(String message) {
+        if (!StringUtils.hasText(message)) {
+            return "-";
+        }
+
+        return message.trim().replace(' ', '_').replace('\r', '_').replace('\n', '_');
     }
 }

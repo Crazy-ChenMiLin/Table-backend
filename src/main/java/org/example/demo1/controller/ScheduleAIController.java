@@ -1,6 +1,7 @@
 package org.example.demo1.controller;
 
 import org.example.demo1.config.MimoProperties;
+import org.example.demo1.logging.TimedLog;
 import org.example.demo1.model.dto.Result;
 import org.example.demo1.model.dto.ScheduleResponse;
 import org.example.demo1.service.ScheduleAIService;
@@ -38,6 +39,7 @@ public class ScheduleAIController {
     }
 
     @PostMapping("/recognize")
+    @TimedLog("schedule_ai_controller_recognize")
     public Result<ScheduleResponse> recognize(@RequestParam("image") MultipartFile image) {
         return Result.success(scheduleAIService.recognize(image));
     }
