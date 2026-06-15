@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/ai/schedule")
+@RequestMapping("/api/courseSchedule/ai")
 public class ScheduleAIController {
 
     private final ScheduleAIService scheduleAIService;
@@ -38,7 +38,7 @@ public class ScheduleAIController {
         ));
     }
 
-    @PostMapping("/recognize")
+    @PostMapping("/recognizeCustomEvent")
     @TimedLog("schedule_ai_controller_recognize")
     public Result<AiCustomEventResponse> recognize(
             @RequestParam("image") MultipartFile image,
