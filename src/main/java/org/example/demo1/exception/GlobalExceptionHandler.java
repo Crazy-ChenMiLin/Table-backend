@@ -1,10 +1,10 @@
 package org.example.demo1.exception;
 
-import org.example.demo1.model.dto.Result;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+import org.example.demo1.entity.response.Result;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -13,9 +13,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
     @ResponseStatus(HttpStatus.OK)
@@ -43,6 +42,18 @@ public class GlobalExceptionHandler {
                 exception.getMessage()
         );
         return Result.error(400, exception.getMessage());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result<Void> handleNoResourceFound(NoResourceFoundException exception) {
+        log.debug(
+                "event=request_exception traceId={} exception_type={} message={}",
+                MDC.get("traceId"),
+                exception.getClass().getSimpleName(),
+                exception.getMessage()
+        );
+        return Result.error(404, exception.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

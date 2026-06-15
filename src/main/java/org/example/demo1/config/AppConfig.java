@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(MimoProperties.class)
+@EnableConfigurationProperties(AiProperties.class)
 public class AppConfig {
 
     @Bean

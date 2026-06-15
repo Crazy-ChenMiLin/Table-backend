@@ -1,9 +1,9 @@
 package org.example.demo1.controller;
 
-import org.example.demo1.config.MimoProperties;
-import org.example.demo1.logging.TimedLog;
-import org.example.demo1.model.dto.Result;
-import org.example.demo1.model.dto.ScheduleResponse;
+import org.example.demo1.common.aspect.TimedLog;
+import org.example.demo1.config.AiProperties;
+import org.example.demo1.entity.response.AiCustomEventResponse;
+import org.example.demo1.entity.response.Result;
 import org.example.demo1.service.ScheduleAIService;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,27 +20,30 @@ import java.util.Map;
 public class ScheduleAIController {
 
     private final ScheduleAIService scheduleAIService;
-    private final MimoProperties mimoProperties;
+    private final AiProperties aiProperties;
 
-    public ScheduleAIController(ScheduleAIService scheduleAIService, MimoProperties mimoProperties) {
+    public ScheduleAIController(ScheduleAIService scheduleAIService, AiProperties aiProperties) {
         this.scheduleAIService = scheduleAIService;
-        this.mimoProperties = mimoProperties;
+        this.aiProperties = aiProperties;
     }
 
     @GetMapping("/config")
     public Result<Map<String, Object>> config() {
         return Result.success(Map.of(
-                "baseUrl", mimoProperties.getBaseUrl(),
-                "model", mimoProperties.getModel(),
-                "apiKeyConfigured", StringUtils.hasText(mimoProperties.getApiKey()),
-                "timeoutSeconds", mimoProperties.getTimeoutSeconds(),
-                "maxRetries", mimoProperties.getMaxRetries()
+                "baseUrl", aiProperties.getBaseUrl(),
+                "model", aiProperties.getModel(),
+                "apiKeyConfigured", StringUtils.hasText(aiProperties.getApiKey()),
+                "timeoutSeconds", aiProperties.getTimeoutSeconds(),
+                "maxRetries", aiProperties.getMaxRetries()
         ));
     }
 
     @PostMapping("/recognize")
     @TimedLog("schedule_ai_controller_recognize")
-    public Result<ScheduleResponse> recognize(@RequestParam("image") MultipartFile image) {
-        return Result.success(scheduleAIService.recognize(image));
+    public Result<AiCustomEventResponse> recognize(
+            @RequestParam("image") MultipartFile image,
+            @RequestParam("yearTerm") String yearTerm
+    ) {
+        return Result.success(scheduleAIService.recognize(image, yearTerm));
     }
 }
